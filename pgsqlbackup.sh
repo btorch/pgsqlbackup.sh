@@ -15,39 +15,53 @@
 #
 #    Please use at your own risk and anyone is welcome to make any changes to it
 #
+# Todo:
+#    Add an email function to send the log out
+#
 
 
 # Location of the backup logfile.
-logfile="/var/lib/pgsql/backups/logfile.log"
-touch $logfile
+LOGFILE="/var/lib/pgsql/backups/logfile.log"
+touch $LOGFILE
 
 # Location to place backups.
-backup_dir="/var/lib/pgsql/backups"
+BACKUP_DIR="/var/lib/pgsql/backups"
+
+# Month's variables
+MONTH=`date +%B`
+PREVIOUS_MONTH=`date -d "-1 Month" +%b`
 
 # Current Date
-timeslot=`date +%m-%d-%y`
+TIMESLOT=`date +%m-%d-%Y`
 
 # Two Days Ago
-two_days_ago=`date -d "-2 days" +%m-%d-%y`
+TWO_DAYS_AGO=`date -d "-2 days" +%m-%d-%Y`
 
-databases=`psql -U postgres -q -c "\l" | sed -n 4,/\eof/p | grep -v rows\) | awk {'print $1'} | grep -v template0`
+# Command below gets a list of the databases
+# and it excludes the template databases
+DBNAMES=`psql -U postgres -q -c "\l" | sed -n 4,/\eof/p | grep -v rows\) | awk {'print $1'} | grep -v template0| grep -v template1`
 
-# If files from two days ago exist they will be delete from the file system
-# In order to save space
+# If files from two days ago exist they will be deleted from the file system
 
-for i in $databases; do
-        if [ -e $backup_dir/postgresql-$i-$two_days_ago-database.gz ]; then
-             rm $backup_dir/postgresql-$i-$two_days_ago-database.gz
+for i in $DBNAMES; do
+        if [ -e $BACKUP_DIR/$i-$TWO_DAYS_AGO.gz ]; then
+             rm $BACKUP_DIR/$i-$TWO_DAYS_AGO.gz
         fi
 done
 
-# Backup all databases that are found with psql list command
+# cleanup any files left from previous month
+for d in `ls -al $BACKUP_DIR/*.gz | grep $PREVIOUS_MONTH | awk '{print $9}'`; do
+    rm -f $BACKUP_DIR/$d
+done
 
-for i in $databases; do
-        timeinfo=`date '+%T %x'`
-        if [ ! -e $backup_dir/postgresql-$i-$timeslot-database.gz ]; then
-            echo "Backup and Vacuum complete at $timeinfo for time slot $timeslot on database: $i " >> $logfile
+# Backup all databases found in the DBNAMES variable
+
+for i in $DBNAMES; do
+        TIMEINFO=`date '+%T %x'`
+        if [ ! -e $BACKUP_DIR/$i-$TIMESLOT.gz ]; then
+            echo "Backup and Vacuum complete at $TIMEINFO for time slot $TIMESLOT on database: $i " >> $LOGFILE
             /usr/bin/vacuumdb -z -U postgres $i >/dev/null 2>&1
-            /usr/bin/pg_dump -U postgres $i  | gzip > "$backup_dir/postgresql-$i-$timeslot-database.gz"
+            /usr/bin/pg_dump -U postgres $i  | gzip > "$BACKUP_DIR/$i-$TIMESLOT.gz"
         fi
 done
+
