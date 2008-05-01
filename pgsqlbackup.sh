@@ -18,6 +18,7 @@
 # Todo:
 #    Add an email function to send the log out
 #
+# Ver. 0.2
 
 
 # Location of the backup logfile.
