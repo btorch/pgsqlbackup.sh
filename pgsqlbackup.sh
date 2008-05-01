@@ -1,78 +1,450 @@
 #!/bin/bash
-
-# Info: 
+#
+# PostgreSQL Backup Script Ver 0.4 (BETA)
+# Based from the autopostgresbackup script
 # 
-#    This script basically creates dumps of all PostgreSQL databases and 
-#    saves the dumps into the "backup_dir" location. The script has also been
-#    written to keep two days of dump files. Therefore you will see the dump files
-#    from the day-of-backup and the day before.  
 #
-#    I do also setup a logrotate for the log file created byt the dumps.
+# TODO:
+# Check disk space before Backing up databases
+# Decide which pgdump format to use
 #
-#    Please also keep an eye ono the dumps created to make sure only a 2 day dump 
-#    retantion occurs. the script is not smart enough to capture leap years and all.
-#    So you may find more the two days of dumps for a database at some point.
+# Visit http://www.zeroaccess.org/postgresql for more info
 #
-#    Please use at your own risk and anyone is welcome to make any changes to it
+#=====================================================================
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
 #
-# Todo:
-#    Add an email function to send the log out
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
 #
-# Ver 0.3
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+#=====================================================================
+#
+#=====================================================================
+# Please Note!!
+#=====================================================================
+#
+# I take no resposibility for any data loss or corruption when using
+# this script. This script will not help in the event of a hard drive 
+# failure. A copy of the PG dumps should always be kept on some
+# type of offline storage. You should copy your backups offline 
+# regularly for best protection.
+#
+#=====================================================================
+
+#==========================================
+# PLEASE SET THE VARIABLES BELLOW ACCORDING 
+# TO YOUR SYSTEM NEEDS
+#==========================================
+
+# Username to access the PostgreSQL 
+USERNAME=postgres
+
+# Database server host or socket directory
+DBHOST=localhost
+
+# List of DBNAMES for Backup 
+# The keyword "all" will backup everything
+# e.g : DBNAMES="database1 database2 database3"
+DBNAMES="all"
+
+# Backup directory location e.g /backups
+BACKUPDIR="/var/lib/pgsql/backups2"
+
+#========================================
+# MAIL SETUP
+#========================================
+# What would you like to be mailed to you?
+# - log   : send only log file
+# - files : send log file and sql files as attachments (see docs)
+# - stdout : will simply output the log to the screen if run manually.
+# - quiet : Only send logs if an error occurs to the MAILADDR.
+MAILCONTENT="stdout"
+
+# Set the maximum allowed email size in k. (4000 = approx 5MB email [see docs])
+MAXATTSIZE="4000"
+
+# Email Address to send mail to? (user@domain.com)
+MAILADDR="admin@zeroaccess.org"
 
 
-# Location of the backup logfile.
-LOGFILE="/var/lib/pgsql/backups/logfile.log"
-touch $LOGFILE
+#============================================================
+# ADVANCED OPTIONS
+#=============================================================
 
-# Location to place backups.
-BACKUP_DIR="/var/lib/pgsql/backups"
+# Options to Vacuum before running the backup
+# 0 : Do not perform any Vacuum functions
+# 1 : Vacuum only (Default)
+# 2 : Vacuum and Analyze
+# 3 : Do a Full Vacuum and Analyze *Note* This can take a long time.
+VACUUM=1
 
-# Month's variables
-MONTH=`date +%B`
-PREVIOUS_MONTH=`date -d "-1 Month" +%b`
+# Include CREATE DATABASE commands in backup?
+CREATE_DATABASE=yes
 
-# Current Date
-TIMESLOT=`date +%m-%d-%Y`
+# What pgdump format to use ? (Custom = 0 | plain SQL text = 1)
+# PGDUMP_FORMAT=1 (NOT YET IMPLEMENTED)
 
-# Two Days Ago
-TWO_DAYS_AGO=`date -d "-2 days" +%m-%d-%Y`
+# Include OIDS in the dump (if you don't what this is say no)
+DUMP_OIDS=no
 
-# Command below gets a list of the databases
-# and it excludes the template databases
-DBNAMES=`psql -U postgres -q -c "\l" | sed -n 4,/\eof/p | grep -v rows\) | awk {'print $1'} | grep -v template0`
+# Choose Compression type. (gzip or default = bzip2)
+COMP=bzip2
 
-# If files from two days ago exist they will be deleted from the file system
-for i in $DBNAMES; do
-	if [ -e $BACKUP_DIR/$i-$TWO_DAYS_AGO.gz ]; then
-	     rm -f $BACKUP_DIR/$i-$TWO_DAYS_AGO.gz
+# Additionally keep a copy of the most recent backup in a seperate directory.
+# Keep a one day retention on the drive to avoid tape retrievel ?
+LATEST=yes
+
+# Command to run before backups (uncomment to use)
+#PREBACKUP="/etc/postgresql-backup-pre"
+
+# Command run after backups (uncomment to use)
+#POSTBACKUP="/etc/postgresql-backup-post"
+
+
+#=====================================================================
+# Should not need to be modified from here down!!
+#=====================================================================
+
+PATH=/usr/bin:/bin 
+
+DATE=`date +%m-%d-%Y`					# Datestamp e.g 2002-09-21
+ODA=`date -d "-1 days" +%m-%d-%Y`			# 1 days ago
+TDA=`date -d "-2 days" +%m-%d-%Y`			# 2 days ago
+#MONTH=`date +%B`					# Current Month
+#PREVIOUS_MONTH=`date -d "-1 Month" +%b`		# Previous Month
+
+LOGFILE=$BACKUPDIR/$DBHOST-`date +%N`.log		# Logfile Name
+LOGERR=$BACKUPDIR/ERRORS_$DBHOST-`date +%N`.log		# Logfile Name
+BACKUPFILES=""
+
+
+##########################################
+# Check existance of required directories 
+# and create them if needed
+##########################################
+
+if [ ! -e "$BACKUPDIR" ]	
+	then
+	mkdir -p "$BACKUPDIR"
+fi
+
+if [ "$LATEST" = "yes" ]
+then
+	if [ ! -e "$BACKUPDIR/last" ]	
+	then
+		mkdir -p "$BACKUPDIR/last"
 	fi
-done
+fi
 
-# cleanup any files left from previous month
-for d in `ls -al $BACKUP_DIR/*.gz | grep $PREVIOUS_MONTH | awk '{print $9}'`; do
-    rm -f $d
-done
+###################################
+# IO redirection for logging.
+####################################
+touch $LOGFILE
+exec 6>&1           # Link file descriptor #6 with stdout.
+                    # Saves stdout.
+exec > $LOGFILE     # stdout replaced with file $LOGFILE.
+touch $LOGERR
+exec 7>&2           # Link file descriptor #7 with stderr.
+                    # Saves stderr.
+exec 2> $LOGERR     # stderr replaced with file $LOGERR.
 
-# Backup Global Objects
-  if [ ! -e $BACKUP_DIR/globals-only-$TIMESLOT.gz ]; then
-            echo "Backing up Global Objects at `date '+%T %x'` for time slot $TIMESLOT " >> $LOGFILE
-            /usr/bin/pg_dumpall -g -U postgres | gzip > "$BACKUP_DIR/globals-only-$TIMESLOT.gz"
+
+
+##########################################
+# Setting up some of the possible flags
+##########################################
+
+if [ "$VACUUM" = "2" ]; then
+VACUUM_OPT="--analyze"
+elif [ "$VACUUM" = "3" ]; then
+VACUUM_OPT="--analyze --full"
+fi
+
+if [ "$CREATE_DATABASE" = "yes" ]; then
+OPT="$OPT --create"
+fi
+
+if [ "$DUMP_OIDS" = "yes" ]; then
+OPT="$OPT --oids"
+fi
+
+# Hostname for LOG information
+if [ "$DBHOST" = "localhost" ]; then
+        HOST=`hostname`
+else
+        HOST=$DBHOST
+fi
+
+####################################
+# Functions
+####################################
+
+# Database data dump function
+#
+dbdump () {
+if [ "$VACUUM" != "0" ]; then
+vacuumdb --user=$USERNAME --host=$DBHOST --quiet $VACUUM_OPT $1
+fi
+pg_dump --user=$USERNAME --host=$DBHOST $OPT $1 > $2
+return 0
+}
+
+# Database dump globals function
+#
+dbdumpglobals () {
+  if [ -e $BACKUPDIR/global-objects.$ODA ]; then
+      cp -fp $BACKUPDIR/global-objects.$ODA  $BACKUPDIR/last/global-objects.$ODA
+      rm -f $BACKUPDIR/global-objects.$ODA
+      if [ -e $BACKUPDIR/last/global-objects.$TDA ]; then
+         rm -f $BACKUPDIR/last/global-objects.$TDA
+      fi
   fi
 
-# Backup Schemas Only
-  if [ ! -e $BACKUP_DIR/schemas-only-$TIMESLOT.gz ]; then
-            echo "Backing up Schemas at `date '+%T %x'` for time slot $TIMESLOT " >> $LOGFILE
-            /usr/bin/pg_dumpall -g -U postgres | gzip > "$BACKUP_DIR/schemas-only-$TIMESLOT.gz"
-  fi
+pg_dumpall --user=$USERNAME --host=$DBHOST -g > $1
 
-# Backup all databases found in the DBNAMES variable
+return 0
+}
 
-for i in $DBNAMES; do
-        TIMEINFO=`date '+%T %x'`
-        if [ ! -e $BACKUP_DIR/$i-$TIMESLOT.gz ]; then 
-            echo "Backup and Vacuum complete at $TIMEINFO for time slot $TIMESLOT on database: $i " >> $LOGFILE
-	    /usr/bin/vacuumdb -z -U postgres $i >/dev/null 2>&1
-	    /usr/bin/pg_dump -U postgres $i  | gzip > "$BACKUP_DIR/$i-$TIMESLOT.gz"
-	fi 
-done
+# Compression function 
+#
+SUFFIX=""
+compression () {
+if [ "$COMP" = "gzip" ]; then
+	gzip -f "$1"
+	echo
+	echo Backup Information for "$1"
+	gzip -l "$1.gz"
+	SUFFIX=".gz"
+elif [ "$COMP" = "bzip2" ]; then
+	echo Compression information for "$1.bz2"
+	bzip2 -f -v $1 2>&1
+	SUFFIX=".bz2"
+else
+	echo "No compression option set, check advanced settings"
+fi
+return 0
+}
+
+####################################
+# Run command before we begin
+####################################
+if [ "$PREBACKUP" ]
+	then
+	echo ======================================================================
+	echo "Prebackup command output."
+	echo
+	eval $PREBACKUP
+	echo
+	echo ======================================================================
+	echo
+fi
+
+
+
+####################################
+# Start of backup dumps
+####################################
+
+echo ======================================================================
+echo pgsqlbackup.sh VER 0.4
+echo http://www.zeroaccess.org/postgresql
+echo 
+echo Backup of Database Server - $HOST
+echo ======================================================================
+
+
+if [ "$DBNAMES" != "all" ]; then
+echo Backup Start Time `date`
+echo ======================================================================
+
+	echo Dumping Global Objects First
+	dbdumpglobals "$BACKUPDIR/global-objects.$DATE"
+
+	for DB in $DBNAMES
+	do
+	# Prepare $DB for using
+	DB="`echo $DB | sed 's/%/ /g'`"
+	
+	echo Daily Backup of Database \( $DB \)
+	echo Rotating last Backup...
+        
+ 	if [ $COMP = bzip2 ]; then 
+        	if [ -e $BACKUPDIR/$DB-$ODA.sql.bz2 ]; then
+		   cp -fp $BACKUPDIR/$DB-$ODA.sql.bz2  $BACKUPDIR/last/$DB-$ODA.sql.bz2
+             	   rm -f $BACKUPDIR/$DB-$ODA.sql.bz2
+			if [ -e $BACKUPDIR/last/$DB-$TDA.sql.bz2 ]; then
+         		   rm -f $BACKUPDIR/last/$DB-$TDA.sql.bz2
+        		fi
+ 		fi
+        else
+	        if [ -e $BACKUPDIR/$DB-$ODA.sql.gz ]; then
+                   cp -fp $BACKUPDIR/$DB-$ODA.sql.gz  $BACKUPDIR/last/$DB-$ODA.sql.gz
+                   rm -f $BACKUPDIR/$DB-$ODA.sql.gz
+			if [ -e $BACKUPDIR/last/$DB-$TDA.sql.gz ]; then
+          	   	   rm -f $BACKUPDIR/last/$DB-$TDA.sql.gz
+        		fi
+                fi
+	fi
+
+	echo
+		dbdump "$DB" "$BACKUPDIR/$DB-$DATE.sql"
+		compression "$BACKUPDIR/$DB-$DATE.sql"
+		BACKUPFILES="$BACKUPFILES $BACKUPDIR/$DB-$DATE.sql$SUFFIX"
+	echo ----------------------------------------------------------------------
+	
+	done
+echo Backup End `date`
+echo ======================================================================
+
+
+else 
+echo Backup Start `date`
+echo ======================================================================
+
+        echo Dumping Global Objects First
+        dbdumpglobals "$BACKUPDIR/global-objects.$DATE"
+
+	echo Daily Backup of All Databases
+	echo
+
+        DBLIST=`psql --user=$USERNAME --host=$DBHOST -q -c "\l" | sed -n 4,/\eof/p | grep -v rows\) | awk {'print $1'} | grep -v template0`
+
+	for DB in $DBLIST
+	do
+
+        echo Backup of Database \( $DB \)
+        echo Rotating last Backup...
+
+        if [ $COMP = bzip2 ]; then
+                if [ -e $BACKUPDIR/$DB-$ODA.sql.bz2 ]; then
+                   cp -fp $BACKUPDIR/$DB-$ODA.sql.bz2  $BACKUPDIR/last/$DB-$ODA.sql.bz2
+                   rm -f $BACKUPDIR/$DB-$ODA.sql.bz2
+                        if [ -e $BACKUPDIR/last/$DB-$TDA.sql.bz2 ]; then
+                           rm -f $BACKUPDIR/last/$DB-$TDA.sql.bz2
+                        fi
+                fi
+        else
+                if [ -e $BACKUPDIR/$DB-$ODA.sql.gz ]; then
+                   cp -fp $BACKUPDIR/$DB-$ODA.sql.gz  $BACKUPDIR/last/$DB-$ODA.sql.gz
+                   rm -f $BACKUPDIR/$DB-$ODA.sql.gz
+                        if [ -e $BACKUPDIR/last/$DB-$TDA.sql.gz ]; then
+                           rm -f $BACKUPDIR/last/$DB-$TDA.sql.gz
+                        fi
+                fi
+        fi
+
+        echo
+                dbdump "$DB" "$BACKUPDIR/$DB-$DATE.sql"
+                compression "$BACKUPDIR/$DB-$DATE.sql"
+                BACKUPFILES="$BACKUPFILES $BACKUPDIR/$DB-$DATE.sql$SUFFIX"
+	echo ----------------------------------------------------------------------
+
+        done
+echo Backup End Time `date`
+echo ======================================================================
+
+fi
+
+####################################
+# Finish of dumps
+####################################
+
+echo Total disk space used for backup storage..
+echo Size - Location
+echo `du -hs "$BACKUPDIR"`
+echo
+echo ======================================================================
+
+####################################
+# Run command when we're done
+####################################
+if [ "$POSTBACKUP" ]
+	then
+	echo ======================================================================
+	echo "Postbackup command output."
+	echo
+	eval $POSTBACKUP
+	echo
+	echo ======================================================================
+fi
+
+####################################
+#Clean up IO redirection
+####################################
+exec 1>&6 6>&-      # Restore stdout and close file descriptor #6.
+exec 1>&7 7>&-      # Restore stdout and close file descriptor #7.
+
+
+
+####################################
+# Mail section if enabled
+####################################
+
+if [ "$MAILCONTENT" = "files" ]
+then
+	if [ -s "$LOGERR" ]
+	then
+		# Include error log if is larger than zero.
+		BACKUPFILES="$BACKUPFILES $LOGERR"
+		ERRORNOTE="WARNING: Error Reported - "
+	fi
+	#Get backup size
+	ATTSIZE=`du -c $BACKUPFILES | grep "[[:digit:][:space:]]total$" |sed s/\s*total//`
+	if [ $MAXATTSIZE -ge $ATTSIZE ]
+	then
+		#enable multiple attachments
+		BACKUPFILES=`echo "$BACKUPFILES" | sed -e "s# # -a #g"`	
+		#send via mutt
+		mutt -s "$ERRORNOTE PostgreSQL Backup Log and SQL Files for $HOST - $DATE" $BACKUPFILES $MAILADDR < $LOGFILE	
+	else
+		cat "$LOGFILE" | mail -s "WARNING! - PostgreSQL Backup exceeds set maximum attachment size on $HOST - $DATE" $MAILADDR
+	fi
+
+elif [ "$MAILCONTENT" = "log" ]
+then
+	cat "$LOGFILE" | mail -s "PostgreSQL Backup Log for $HOST - $DATE" $MAILADDR
+	if [ -s "$LOGERR" ]
+		then
+			cat "$LOGERR" | mail -s "ERRORS REPORTED: PostgreSQL Backup error Log for $HOST - $DATE" $MAILADDR
+	fi
+	
+elif [ "$MAILCONTENT" = "quiet" ]
+then
+	if [ -s "$LOGERR" ]
+		then
+			cat "$LOGERR" | mail -s "ERRORS REPORTED: PostgreSQL Backup error Log for $HOST - $DATE" $MAILADDR
+			cat "$LOGFILE" | mail -s "PostgreSQL Backup Log for $HOST - $DATE" $MAILADDR
+	fi
+else
+	if [ -s "$LOGERR" ]
+		then
+			cat "$LOGFILE"
+			echo
+			echo "###### WARNING ######"
+			echo "Errors reported during AutoPostgreSQLBackup execution.. Backup failed"
+			echo "Error log below.."
+			cat "$LOGERR"
+	else
+		cat "$LOGFILE"
+	fi	
+fi
+
+if [ -s "$LOGERR" ]
+	then
+		STATUS=1
+	else
+		STATUS=0
+fi
+
+# Clean up Logfile
+eval rm -f "$LOGFILE"
+eval rm -f "$LOGERR"
+
+exit $STATUS
