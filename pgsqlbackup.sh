@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# PostgreSQL Backup Script Ver 0.4 (BETA)
+# PostgreSQL Backup Script Ver 0.5 (BETA)
 # Based from the autopostgresbackup script
 # 
 #
@@ -70,7 +70,7 @@ MAILCONTENT="stdout"
 MAXATTSIZE="4000"
 
 # Email Address to send mail to? (user@domain.com)
-MAILADDR="admin@zeroaccess.org"
+MAILADDR="user@domain.com"
 
 
 #============================================================
@@ -312,7 +312,7 @@ fi
 ####################################
 
 echo ======================================================================
-echo pgsqlbackup.sh VER 0.4
+echo pgsqlbackup.sh VER 0.5
 echo http://www.zeroaccess.org/postgresql
 echo 
 echo Backup of Database Server - $HOST
