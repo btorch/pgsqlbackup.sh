@@ -6,7 +6,6 @@
 #
 # TODO:
 # Check disk space before Backing up databases
-# Decide which pgdump format to use
 #
 # Visit http://www.zeroaccess.org/postgresql for more info
 #
@@ -55,7 +54,7 @@ DBHOST=localhost
 DBNAMES="all"
 
 # Backup directory location e.g /backups
-BACKUPDIR="/var/lib/pgsql/backups2"
+BACKUPDIR="/var/lib/pgsql/backups"
 
 #========================================
 # MAIL SETUP
@@ -97,9 +96,24 @@ DUMP_OIDS=no
 # Choose Compression type. (gzip or default = bzip2)
 COMP=bzip2
 
+# Output Format for pg_dump   
+# output file format (custom = Fc , Custom tar = Ft , SQL plain text = Fp)
+DUMP_OPT="-Fc"
+
+# Dump suffix added to the dumped file ( Custom Formats = dump | SQL text = sql)
+# Default is dump for custom format dumps
+# IMPORTANT: PLEASE SEE PREVIOUS VARIABLE SETTING
+DUMP_SUFFIX=dump
+
 # Additionally keep a copy of the most recent backup in a seperate directory.
 # Keep a one day retention on the drive to avoid tape retrievel ?
 LATEST=yes
+
+#
+# Any other extra options that you might want to pass to pg_dump 
+# should go below. Please test it first before making it permmanent.
+#
+EXTRA_OPTS=""
 
 # Command to run before backups (uncomment to use)
 #PREBACKUP="/etc/postgresql-backup-pre"
@@ -117,8 +131,6 @@ PATH=/usr/bin:/bin
 DATE=`date +%m-%d-%Y`					# Datestamp e.g 2002-09-21
 ODA=`date -d "-1 days" +%m-%d-%Y`			# 1 days ago
 TDA=`date -d "-2 days" +%m-%d-%Y`			# 2 days ago
-#MONTH=`date +%B`					# Current Month
-#PREVIOUS_MONTH=`date -d "-1 Month" +%b`		# Previous Month
 
 LOGFILE=$BACKUPDIR/$DBHOST-`date +%N`.log		# Logfile Name
 LOGERR=$BACKUPDIR/ERRORS_$DBHOST-`date +%N`.log		# Logfile Name
@@ -182,6 +194,7 @@ else
         HOST=$DBHOST
 fi
 
+
 ####################################
 # Functions
 ####################################
@@ -189,19 +202,24 @@ fi
 # Database data dump function
 #
 dbdump () {
+
 if [ "$VACUUM" != "0" ]; then
 vacuumdb --user=$USERNAME --host=$DBHOST --quiet $VACUUM_OPT $1
 fi
-pg_dump --user=$USERNAME --host=$DBHOST $OPT $1 > $2
+
+pg_dump -f $2 --user=$USERNAME --host=$DBHOST $DUMP_OPT $OPT $EXTRA_OPTS $1 
+
 return 0
 }
 
 # Database dump globals function
 #
 dbdumpglobals () {
+
   if [ -e $BACKUPDIR/global-objects.$ODA ]; then
       cp -fp $BACKUPDIR/global-objects.$ODA  $BACKUPDIR/last/global-objects.$ODA
       rm -f $BACKUPDIR/global-objects.$ODA
+
       if [ -e $BACKUPDIR/last/global-objects.$TDA ]; then
          rm -f $BACKUPDIR/last/global-objects.$TDA
       fi
@@ -211,6 +229,47 @@ pg_dumpall --user=$USERNAME --host=$DBHOST -g > $1
 
 return 0
 }
+
+
+#
+# Retrieve list of what databases should be backed up
+#
+get_dblist () {
+
+if [ "$DBNAMES" == "all" ]; then
+
+   LIST=`psql --user=$USERNAME --host=$DBHOST -q -c "\l" | sed -n 4,/\eof/p | grep -v rows\) | awk {'print $1'} | grep -v template0`
+   DBLIST=$LIST
+else
+  DBLIST=$DBNAMES
+fi
+
+return 0
+}
+
+#
+# Remove two days old files and place the
+# previous day backup into the folder named last
+#
+rotate_last () {
+  if [ $COMP = bzip2 ]; then
+     COMP_SUFFIX=bz2
+  else
+     COMP_SUFFIX=gz
+  fi
+
+ if [ -e $BACKUPDIR/$DB-$ODA.$DUMP_SUFFIX.$COMP_SUFFIX ]; then
+     cp -fp $BACKUPDIR/$DB-$ODA.$DUMP_SUFFIX.$COMP_SUFFIX  $BACKUPDIR/last/$DB-$ODA.$DUMP_SUFFIX.$COMP_SUFFIX
+     rm -f $BACKUPDIR/$DB-$ODA.$DUMP_SUFFIX.$COMP_SUFFIX
+        if [ -e $BACKUPDIR/last/$DB-$TDA.$DUMP_SUFFIX.$COMP_SUFFIX ]; then
+            rm -f $BACKUPDIR/last/$DB-$TDA.$DUMP_SUFFIX.$COMP_SUFFIX 
+         fi
+ fi
+
+return 0
+}
+
+
 
 # Compression function 
 #
@@ -259,98 +318,38 @@ echo
 echo Backup of Database Server - $HOST
 echo ======================================================================
 
-
-if [ "$DBNAMES" != "all" ]; then
 echo Backup Start Time `date`
 echo ======================================================================
 
 	echo Dumping Global Objects First
 	dbdumpglobals "$BACKUPDIR/global-objects.$DATE"
 
-	for DB in $DBNAMES
-	do
-	# Prepare $DB for using
-	DB="`echo $DB | sed 's/%/ /g'`"
-	
-	echo Daily Backup of Database \( $DB \)
-	echo Rotating last Backup...
-        
- 	if [ $COMP = bzip2 ]; then 
-        	if [ -e $BACKUPDIR/$DB-$ODA.sql.bz2 ]; then
-		   cp -fp $BACKUPDIR/$DB-$ODA.sql.bz2  $BACKUPDIR/last/$DB-$ODA.sql.bz2
-             	   rm -f $BACKUPDIR/$DB-$ODA.sql.bz2
-			if [ -e $BACKUPDIR/last/$DB-$TDA.sql.bz2 ]; then
-         		   rm -f $BACKUPDIR/last/$DB-$TDA.sql.bz2
-        		fi
- 		fi
-        else
-	        if [ -e $BACKUPDIR/$DB-$ODA.sql.gz ]; then
-                   cp -fp $BACKUPDIR/$DB-$ODA.sql.gz  $BACKUPDIR/last/$DB-$ODA.sql.gz
-                   rm -f $BACKUPDIR/$DB-$ODA.sql.gz
-			if [ -e $BACKUPDIR/last/$DB-$TDA.sql.gz ]; then
-          	   	   rm -f $BACKUPDIR/last/$DB-$TDA.sql.gz
-        		fi
-                fi
-	fi
-
-	echo
-		dbdump "$DB" "$BACKUPDIR/$DB-$DATE.sql"
-		compression "$BACKUPDIR/$DB-$DATE.sql"
-		BACKUPFILES="$BACKUPFILES $BACKUPDIR/$DB-$DATE.sql$SUFFIX"
-	echo ----------------------------------------------------------------------
-	
-	done
-echo Backup End `date`
-echo ======================================================================
-
-
-else 
-echo Backup Start `date`
-echo ======================================================================
-
-        echo Dumping Global Objects First
-        dbdumpglobals "$BACKUPDIR/global-objects.$DATE"
-
-	echo Daily Backup of All Databases
+	echo Daily Backup of Databases
 	echo
 
-        DBLIST=`psql --user=$USERNAME --host=$DBHOST -q -c "\l" | sed -n 4,/\eof/p | grep -v rows\) | awk {'print $1'} | grep -v template0`
+	get_dblist 
 
 	for DB in $DBLIST
 	do
+	
+	echo Daily Backup of Database \( $DB \)
+	echo Rotating last Backup...
 
-        echo Backup of Database \( $DB \)
-        echo Rotating last Backup...
-
-        if [ $COMP = bzip2 ]; then
-                if [ -e $BACKUPDIR/$DB-$ODA.sql.bz2 ]; then
-                   cp -fp $BACKUPDIR/$DB-$ODA.sql.bz2  $BACKUPDIR/last/$DB-$ODA.sql.bz2
-                   rm -f $BACKUPDIR/$DB-$ODA.sql.bz2
-                        if [ -e $BACKUPDIR/last/$DB-$TDA.sql.bz2 ]; then
-                           rm -f $BACKUPDIR/last/$DB-$TDA.sql.bz2
-                        fi
-                fi
-        else
-                if [ -e $BACKUPDIR/$DB-$ODA.sql.gz ]; then
-                   cp -fp $BACKUPDIR/$DB-$ODA.sql.gz  $BACKUPDIR/last/$DB-$ODA.sql.gz
-                   rm -f $BACKUPDIR/$DB-$ODA.sql.gz
-                        if [ -e $BACKUPDIR/last/$DB-$TDA.sql.gz ]; then
-                           rm -f $BACKUPDIR/last/$DB-$TDA.sql.gz
-                        fi
-                fi
-        fi
-
-        echo
-                dbdump "$DB" "$BACKUPDIR/$DB-$DATE.sql"
-                compression "$BACKUPDIR/$DB-$DATE.sql"
-                BACKUPFILES="$BACKUPFILES $BACKUPDIR/$DB-$DATE.sql$SUFFIX"
+        rotate_last 
+        
+	echo
+		dbdump "$DB" "$BACKUPDIR/$DB-$DATE.$DUMP_SUFFIX"
+		compression "$BACKUPDIR/$DB-$DATE.$DUMP_SUFFIX"
+		BACKUPFILES="$BACKUPFILES $BACKUPDIR/$DB-$DATE.$DUMP_SUFFIX$SUFFIX"
 	echo ----------------------------------------------------------------------
-
-        done
+	
+	done
+echo ======================================================================
 echo Backup End Time `date`
 echo ======================================================================
 
-fi
+
+
 
 ####################################
 # Finish of dumps
