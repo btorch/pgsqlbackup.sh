@@ -333,7 +333,10 @@ echo ======================================================================
 	do
 	
 	echo Daily Backup of Database \( $DB \)
-	echo Rotating last Backup...
+	echo 
+	echo ...Rotating last Backup...
+	echo Deleting old $DB backup file from $BACKUPDIR/last folder
+	echo Moving yesterday $DB backup file into $BACKUPDIR/last folder 
 
         rotate_last 
         
