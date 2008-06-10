@@ -87,9 +87,6 @@ VACUUM=1
 # Include CREATE DATABASE commands in backup?
 CREATE_DATABASE=yes
 
-# What pgdump format to use ? (Custom = 0 | plain SQL text = 1)
-# PGDUMP_FORMAT=1 (NOT YET IMPLEMENTED)
-
 # Include OIDS in the dump (if you don't what this is say no)
 DUMP_OIDS=no
 
@@ -317,14 +314,19 @@ echo http://www.zeroaccess.org/postgresql
 echo 
 echo Backup of Database Server - $HOST
 echo ======================================================================
-
+echo
+echo ======================================================================
 echo Backup Start Time `date`
 echo ======================================================================
+echo
 
-	echo Dumping Global Objects First
+echo ====================
+echo Global Objects Dump 
+echo ====================
+
 	dbdumpglobals "$BACKUPDIR/global-objects.$DATE"
-
-	echo Daily Backup of Databases
+	echo Global Objects backed up ...
+	echo 
 	echo
 
 	get_dblist 
@@ -332,9 +334,13 @@ echo ======================================================================
 	for DB in $DBLIST
 	do
 	
+	echo ==========================================
 	echo Daily Backup of Database \( $DB \)
+	echo ==========================================
 	echo 
-	echo ...Rotating last Backup...
+	echo =========================
+	echo Rotating last Backup...
+	echo =========================
 	echo Deleting old $DB backup file from $BACKUPDIR/last folder
 	echo Moving yesterday $DB backup file into $BACKUPDIR/last folder 
 
@@ -344,13 +350,15 @@ echo ======================================================================
 		dbdump "$DB" "$BACKUPDIR/$DB-$DATE.$DUMP_SUFFIX"
 		compression "$BACKUPDIR/$DB-$DATE.$DUMP_SUFFIX"
 		BACKUPFILES="$BACKUPFILES $BACKUPDIR/$DB-$DATE.$DUMP_SUFFIX$SUFFIX"
-	echo ----------------------------------------------------------------------
+	echo 
+	echo
 	
 	done
+echo
 echo ======================================================================
 echo Backup End Time `date`
 echo ======================================================================
-
+echo
 
 
 
@@ -358,7 +366,9 @@ echo ======================================================================
 # Finish of dumps
 ####################################
 
-echo Total disk space used for backup storage..
+echo =========================================
+echo Total disk space used for backup storage
+echo =========================================
 echo Size - Location
 echo `du -hs "$BACKUPDIR"`
 echo
