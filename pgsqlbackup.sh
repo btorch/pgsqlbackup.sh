@@ -503,6 +503,7 @@ then
   then
     cat "$LOGERR" | mail -s "ERRORS REPORTED: PostgreSQL Backup error Log for $HOST - $DATE" $MAILADDR
     cat "$LOGFILE" | mail -s "PostgreSQL Backup Log for $HOST - $DATE" $MAILADDR
+    cat "$VDB_LOGFILE" | mail -s "VACUUM WARNINGS REPORTED: PostgreSQL Vacuum  Log for $HOST - $DATE" $MAILADDR
   fi
 
 else
