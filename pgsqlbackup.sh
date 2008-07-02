@@ -1,11 +1,16 @@
 #!/bin/bash
 #
-# PostgreSQL Backup Script Ver 0.6 
+# PostgreSQL Backup Script Ver 0.6 (BETA)
 # Based from the autopostgresbackup script
 # 
 #
 # TODO:
-# Check disk space before Backing up databases
+# - Check disk space before Backing up databases
+# - Calculate how much space will be needed after the first backup is done
+#   may be able to do so by calculating the data input size that goes into the 
+#   compression  
+# - Provide an option for no compression
+# - Remove compression logging when above is done if no compression is chosen
 #
 # Visit http://www.zeroaccess.org/postgresql for more info
 #
@@ -70,7 +75,7 @@ MAILCONTENT="stdout"
 MAXATTSIZE="4000"
 
 # Email Address to send mail to? (user@domain.com)
-MAILADDR="user@domain.com"
+#MAILADDR="user@domain.com"
 
 
 #============================================================
@@ -210,8 +215,11 @@ if [ "$VACUUM" != "0" ]; then
 echo =========================
 echo "Performing Vacuum of DB $1"
 echo =========================
+echo Start Time: `date +%m-%d-%Y_%r`
 
 vacuumdb --user=$USERNAME --host=$DBHOST --quiet $VACUUM_OPT $1 2>> $VDB_LOGFILE
+
+echo End Time: `date +%m-%d-%Y_%r`
 
  if [ $? -eq 0 ]; then
    echo "Status: Vaccum performed successfully "
@@ -227,10 +235,13 @@ echo
 echo =========================
 echo Creating PGSQL dump file
 echo =========================
+echo Start Time: `date +%m-%d-%Y_%r`
 echo Filename: $2
-echo
 
 pg_dump -f $2 --user=$USERNAME --host=$DBHOST $DUMP_OPT $OPT $EXTRA_OPTS $1 
+
+echo End Time: `date +%m-%d-%Y_%r`
+echo
 
 return 0
 }
@@ -353,7 +364,7 @@ fi
 ####################################
 
 echo ======================================================================
-echo pgsqlbackup.sh VER 0.6
+echo pgsqlbackup.sh VER 0.6 \(BETA\)
 echo http://www.zeroaccess.org/postgresql
 echo 
 echo Backup of Database Server - $HOST
@@ -401,7 +412,11 @@ echo ====================
         echo =========================
         echo Compression Info 
         echo =========================
+	echo Start Time: `date +%m-%d-%Y_%r`
+
 	compression "$BACKUPDIR/$DB-$DATE.$DUMP_SUFFIX"
+
+	echo End Time: `date +%m-%d-%Y_%r`
 
 	BACKUPFILES="$BACKUPFILES $BACKUPDIR/$DB-$DATE.$DUMP_SUFFIX$SUFFIX"
 
@@ -503,7 +518,11 @@ then
   then
     cat "$LOGERR" | mail -s "ERRORS REPORTED: PostgreSQL Backup error Log for $HOST - $DATE" $MAILADDR
     cat "$LOGFILE" | mail -s "PostgreSQL Backup Log for $HOST - $DATE" $MAILADDR
-    cat "$VDB_LOGFILE" | mail -s "VACUUM WARNINGS REPORTED: PostgreSQL Vacuum  Log for $HOST - $DATE" $MAILADDR
+  fi
+
+  if [ -s "$VDB_LOGFILE" ]
+  then
+    cat "$VDB_LOGFILE" | mail -s "VACUUM WARNINGS: PostgreSQL Backup error Log for $HOST - $DATE" $MAILADDR
   fi
 
 else
@@ -559,9 +578,5 @@ if [ -s "$LOGERR" ]
 	else
 		STATUS=0
 fi
-
-# Clean up Logfile
-#eval rm -f "$LOGFILE"
-#eval rm -f "$LOGERR"
 
 exit $STATUS
