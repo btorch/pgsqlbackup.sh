@@ -1,18 +1,16 @@
 #!/bin/bash
 #
-# PostgreSQL Backup Script Ver 0.6 (BETA)
+# PostgreSQL Backup Script Ver 1.0 
 # Based from the autopostgresbackup script
 # 
 #
-# TODO:
+#==========================================
+# TODO
+#==========================================
 # - Check disk space before Backing up databases
-# - Calculate how much space will be needed after the first backup is done
-#   may be able to do so by calculating the data input size that goes into the 
-#   compression  
-# - Provide an option for no compression
-# - Remove compression logging when above is done if no compression is chosen
+# - Create a mail log format that fits on an iPhone screen 
 #
-# Visit http://www.zeroaccess.org/postgresql for more info
+# Visit http://www.zeroaccess.org/postgresql-backup for more info
 #
 #=====================================================================
 # This program is free software; you can redistribute it and/or modify
@@ -31,7 +29,7 @@
 #=====================================================================
 #
 #=====================================================================
-# Please Note!!
+# PLEASE NOTE
 #=====================================================================
 #
 # I take no resposibility for any data loss or corruption when using
@@ -41,17 +39,17 @@
 # regularly for best protection.
 #
 #=====================================================================
-
+#
 #==========================================
-# PLEASE SET THE VARIABLES BELLOW ACCORDING 
-# TO YOUR SYSTEM NEEDS
+# CONFIGURATION PARAMETERS BELOW
 #==========================================
 
-# Username to access the PostgreSQL 
+# Admin superuser for PostgreSQL 
 USERNAME=postgres
 
-# Database server host or socket directory
-DBHOST=localhost
+# Connection type  
+# Can be localhost (TCP/IP)  or socket directory (default)
+CONN_TYPE=/tmp
 
 # List of DBNAMES for Backup 
 # The keyword "all" will backup everything
@@ -61,60 +59,60 @@ DBNAMES="all"
 # Backup directory location e.g /backups
 BACKUPDIR="/var/lib/pgsql/backups"
 
-#========================================
-# MAIL SETUP
-#========================================
+# Setting PATH variable so that it can find 
+# PostgreSQL binaries. 
+PATH=/usr/bin:/bin:/usr/local/bin
+
+# Hostname for LOG information
+HOST=`hostname`
+
+
+#================
+# MAIL SETUP 
+#================
 # What would you like to be mailed to you?
 # - maillogs : send only log file(s)
 # - files : send log file and backed up files as attachments 
-# - stdout : will simply output the log to the screen if run manually.
-# - quiet : Only send logs if an error occurs to the MAILADDR.
+# - stdout : will simply output the log to the screen if run manually
+# - quiet : Only send logs if an error occurs
 MAILCONTENT="stdout"
 
 # Set the maximum allowed email size in k. (4000 = approx 5MB email)
 MAXATTSIZE="4000"
 
 # Email Address to send mail to? (user@domain.com)
-#MAILADDR="user@domain.com"
+MAILADDR="admin@domain.com"
 
 
-#============================================================
+#==================
 # ADVANCED OPTIONS
-#=============================================================
+#==================
 
 # Options to Vacuum before running the backup
-# 0 : Do not perform any Vacuum functions
-# 1 : Vacuum only (Default)
+# 0 : Do not perform any Vacuum functions (default)
+# 1 : Vacuum only 
 # 2 : Vacuum and Analyze
-# 3 : Do a Full Vacuum and Analyze *Note* This can take a long time.
-VACUUM=1
+# 3 : Do a Full Vacuum and Analyze 
+VACUUM=0
 
-# Include CREATE DATABASE commands in backup?
+# Include CREATE DATABASE commands in backup
 CREATE_DATABASE=yes
 
-# Include OIDS in the dump (if you don't what this is say no)
+# Include OIDS in the dump (if you don't know what this is say no)
 DUMP_OIDS=no
 
 # Choose Compression type. (gzip or default = bzip2)
 COMP=bzip2
 
-# Output Format for pg_dump   
-# output file format (custom = Fc , Custom tar = Ft , SQL plain text = Fp)
-DUMP_OPT="-Fp"
-
-# Dump suffix added to the dumped file ( Custom Formats = dump | SQL text = sql)
-# Default is dump for custom format dumps
-# IMPORTANT: PLEASE SEE PREVIOUS VARIABLE SETTING
-DUMP_SUFFIX=sql
+# Dump Format Output (custom = Fc , Custom tar = Ft , SQL plain text = Fp)
+DUMP_OPT="-Fc"
 
 # Additionally keep a copy of the most recent backup in a seperate directory.
-# Keep a one day retention on the drive to avoid tape retrievel ?
-LATEST=no
+# Keep a one day retention on the drive to avoid tape retrievel 
+RETENTION=yes
 
-#
 # Any other extra options that you might want to pass to pg_dump 
 # should go below. Please test it first before making it permmanent.
-#
 EXTRA_OPTS=""
 
 # Command to run before backups (uncomment to use)
@@ -125,29 +123,18 @@ EXTRA_OPTS=""
 
 
 #=====================================================================
-# Should not need to be modified from here down!!
+# DO NOT MODIFY ANYTHING FROM DOWN HERE 
 #=====================================================================
 
-PATH=/usr/bin:/bin 
-
 DATE=`date +%m-%d-%Y`					# Datestamp e.g 2002-09-21
-ODA=`date -d "-1 days" +%m-%d-%Y`			# 1 days ago
+ODA=`date -d "-1 days" +%m-%d-%Y`			# 1 day ago
 TDA=`date -d "-2 days" +%m-%d-%Y`			# 2 days ago
 
-LOGFILE=$BACKUPDIR/$DBHOST-$DATE.log			# Logfile Name
-LOGERR=$BACKUPDIR/ERRORS_$DBHOST-$DATE.log		# Error Logfile Name
-VDB_LOGFILE=$BACKUPDIR/VDB_$DBHOST-$DATE.log		# VDB Logfile Name
+LOGFILE=$BACKUPDIR/$HOST-$DATE.log			# Backup Logfile Name
+LOGERR=$BACKUPDIR/ERRORS_$HOST-$DATE.log		# Backup Error Logfile Name
+VDB_LOGFILE=$BACKUPDIR/VDB_$HOST-$DATE.log		# Vacuum error Logfile Name
 
 BACKUPFILES=""
-
-##########################################
-# Create log files
-##########################################
-touch $LOGFILE
-touch $LOGERR
-
-touch $VDB_LOGFILE
-echo 0>$VDB_LOGFILE
 
 
 ##########################################
@@ -159,11 +146,21 @@ if [ ! -e "$BACKUPDIR" ]; then
    mkdir -p "$BACKUPDIR"
 fi
 
-if [ "$LATEST" = "yes" ]; then
+if [ "$RETENTION" = "yes" ]; then
    if [ ! -e "$BACKUPDIR/last" ]; then
       mkdir -p "$BACKUPDIR/last"
    fi
 fi
+
+
+##########################################
+# Create log files
+##########################################
+touch $LOGFILE
+touch $LOGERR
+touch $VDB_LOGFILE
+echo 0>$VDB_LOGFILE
+
 
 ###################################
 # IO redirection for logging.
@@ -181,54 +178,61 @@ exec 2> $LOGERR     # stderr replaced with file $LOGERR.
 ##########################################
 
 if [ "$VACUUM" = "2" ]; then
-VACUUM_OPT="--analyze"
+   VACUUM_OPT="--analyze"
+
 elif [ "$VACUUM" = "3" ]; then
-VACUUM_OPT="--analyze --full"
+   VACUUM_OPT="--analyze --full"
 fi
 
 if [ "$CREATE_DATABASE" = "yes" ]; then
-OPT="$OPT --create"
+   OPT="$OPT --create"
 fi
 
 if [ "$DUMP_OIDS" = "yes" ]; then
 OPT="$OPT --oids"
 fi
 
-# Hostname for LOG information
-if [ "$DBHOST" = "localhost" ]; then
-        HOST=`hostname`
+if [ "$DUMP_OPT" = "-Fp" ]; then
+   DUMP_SUFFIX="sql"
 else
-        HOST=$DBHOST
+   DUMP_SUFFIX="dump"
 fi
+  
 
 
 ####################################
-# Functions
+# Start of Functions
 ####################################
 
-# Database data dump function
 
-dbdump () {
-
-if [ "$VACUUM" != "0" ]; then
+# DATABASE VACUUM FUNCTION
+dbvacuum () {
 
 echo =========================
 echo "Performing Vacuum of DB $1"
 echo =========================
 echo Start Time: `date +%m-%d-%Y_%r`
 
-vacuumdb --user=$USERNAME --host=$DBHOST --quiet $VACUUM_OPT $1 2>> $VDB_LOGFILE
+vacuumdb --user=$USERNAME --host=$CONN_TYPE --quiet $VACUUM_OPT $1 2>> $VDB_LOGFILE
 
 echo End Time: `date +%m-%d-%Y_%r`
 
- if [ $? -eq 0 ]; then
-   echo "Status: Vaccum performed successfully "
- else 
+ if [ -s $VDB_LOGFILE ]; then
    echo "Status: warnings/errors detected"
    echo "See file $VDB_LOGFILE"
    echo 
- fi 
+ else
+   echo "Status: Vaccum performed successfully "
+   echo
+ fi
 
+}
+
+# DATABASE DUMP FUNCTION
+dbdump () {
+
+if [ "$VACUUM" != "0" ]; then
+   dbvacuum $1
 fi
 
 echo 
@@ -238,7 +242,7 @@ echo =========================
 echo Start Time: `date +%m-%d-%Y_%r`
 echo Filename: $2
 
-pg_dump -f $2 --user=$USERNAME --host=$DBHOST $DUMP_OPT $OPT $EXTRA_OPTS $1 
+pg_dump -f $2 --user=$USERNAME --host=$CONN_TYPE $DUMP_OPT $OPT $EXTRA_OPTS $1 
 
 echo End Time: `date +%m-%d-%Y_%r`
 echo
@@ -246,11 +250,12 @@ echo
 return 0
 }
 
-# Database dump globals function
+# DUMP OF GLOBAL OBJECTS 
+# Also rotates its own global-objects files
 #
 dbdumpglobals () {
 
- if [ "$LATEST" = "yes" ]; then  
+ if [ "$RETENTION" = "yes" ]; then  
    if [ -e $BACKUPDIR/global-objects.$ODA ]; then
        cp -fp $BACKUPDIR/global-objects.$ODA  $BACKUPDIR/last/global-objects.$ODA
        rm -f $BACKUPDIR/global-objects.$ODA
@@ -264,20 +269,20 @@ dbdumpglobals () {
    fi
  fi
 
- pg_dumpall --user=$USERNAME --host=$DBHOST -g > $1
+pg_dumpall --user=$USERNAME --host=$CONN_TYPE -g > $1
 
 return 0
 }
 
 
-#
-# Retrieve list of what databases should be backed up
+
+# RETRIVAL OF DATABASE LIST 
 #
 get_dblist () {
 
 if [ "$DBNAMES" == "all" ]; then
 
-   LIST=`psql --user=$USERNAME --host=$DBHOST -q -c "\l" | sed -n 4,/\eof/p | grep -v rows\) | awk {'print $1'} | grep -v template0`
+   LIST=`psql --user=$USERNAME --host=$CONN_TYPE -q -c "\l" | sed -n 4,/\eof/p | grep -v rows\) | awk {'print $1'} | grep -v template0`
    DBLIST=$LIST
 else
   DBLIST=$DBNAMES
@@ -286,51 +291,65 @@ fi
 return 0
 }
 
+
+# DATABASE DUMP FILES ROTATION
+# deletes  two days old files and place the
+# previous day dumps into the folder named last
 #
-# Remove two days old files and place the
-# previous day backup into the folder named last
-#
-rotate_last () {
+rotate_dumps () {
+
   if [ $COMP = bzip2 ]; then
      COMP_SUFFIX=bz2
   else
      COMP_SUFFIX=gz
   fi
 
- if [ -e $BACKUPDIR/$DB-$ODA.$DUMP_SUFFIX.$COMP_SUFFIX ]; then
-     cp -fp $BACKUPDIR/$DB-$ODA.$DUMP_SUFFIX.$COMP_SUFFIX  $BACKUPDIR/last/$DB-$ODA.$DUMP_SUFFIX.$COMP_SUFFIX
-     rm -f $BACKUPDIR/$DB-$ODA.$DUMP_SUFFIX.$COMP_SUFFIX
-        if [ -e $BACKUPDIR/last/$DB-$TDA.$DUMP_SUFFIX.$COMP_SUFFIX ]; then
-            rm -f $BACKUPDIR/last/$DB-$TDA.$DUMP_SUFFIX.$COMP_SUFFIX 
-         fi
- fi
+  echo =========================
+  echo Rotating Backup dumps ...
+  echo =========================
+        echo Deleting old $DB backup file from $BACKUPDIR/last folder
+        echo Moving yesterday $DB backup file into $BACKUPDIR/last folder   
+        echo
 
-return 0
-}
 
-remove_last () {
-  if [ $COMP = bzip2 ]; then
-     COMP_SUFFIX=bz2
+  if [ "$RETENTION" = "yes" ]; then
+
+     if [ -e $BACKUPDIR/$DB-$ODA.$DUMP_SUFFIX.$COMP_SUFFIX ]; then
+
+        echo Moving yesterday $DB backup file into $BACKUPDIR/last folder   
+        cp -fp $BACKUPDIR/$DB-$ODA.$DUMP_SUFFIX.$COMP_SUFFIX  $BACKUPDIR/last/$DB-$ODA.$DUMP_SUFFIX.$COMP_SUFFIX
+        rm -f $BACKUPDIR/$DB-$ODA.$DUMP_SUFFIX.$COMP_SUFFIX
+
+          if [ -e $BACKUPDIR/last/$DB-$TDA.$DUMP_SUFFIX.$COMP_SUFFIX ]; then
+
+             echo Deleting old $DB backup file from $BACKUPDIR/last folder
+             rm -f $BACKUPDIR/last/$DB-$TDA.$DUMP_SUFFIX.$COMP_SUFFIX
+
+          fi
+     fi
   else
-     COMP_SUFFIX=gz
-  fi
 
-  if [ -e $BACKUPDIR/$DB-$ODA.$DUMP_SUFFIX.$COMP_SUFFIX ]; then
-     rm -f $BACKUPDIR/$DB-$ODA.$DUMP_SUFFIX.$COMP_SUFFIX
+     if [ -e $BACKUPDIR/$DB-$ODA.$DUMP_SUFFIX.$COMP_SUFFIX ]; then
+
+        echo Deleting yesterday $DB backup file 
+        rm -f $BACKUPDIR/$DB-$ODA.$DUMP_SUFFIX.$COMP_SUFFIX
+
+     fi
   fi
 
 return 0
 }
 
 
-# Compression function 
+
+# COMPRESSION FUNCTION 
 #
 SUFFIX=""
 compression () {
 if [ "$COMP" = "gzip" ]; then
 	gzip -f "$1"
 	echo
-	echo Backup Information for "$1"
+	echo Compression information for "$1.gz"
 	gzip -l "$1.gz"
 	SUFFIX=".gz"
 elif [ "$COMP" = "bzip2" ]; then
@@ -338,7 +357,7 @@ elif [ "$COMP" = "bzip2" ]; then
 	bzip2 -f -v $1 2>&1
 	SUFFIX=".bz2"
 else
-	echo "No compression option set, check advanced settings"
+	echo "No compression chosen"
 fi
 return 0
 }
@@ -364,7 +383,7 @@ fi
 ####################################
 
 echo ======================================================================
-echo pgsqlbackup.sh VER 0.6 \(BETA\)
+echo pgsqlbackup.sh VER 1.0 RC1
 echo http://www.zeroaccess.org/postgresql
 echo 
 echo Backup of Database Server - $HOST
@@ -394,18 +413,7 @@ echo ====================
 	echo ==========================================
 	echo 
 
-	if [ $LATEST = "yes" ]; then
-	   echo =========================
- 	   echo Rotating last Backup...
-  	   echo =========================
-	   echo Deleting old $DB backup file from $BACKUPDIR/last folder
-	   echo Moving yesterday $DB backup file into $BACKUPDIR/last folder 
-  	   echo
-
-	   rotate_last 
-	else
-   	   remove_last
-	fi
+        rotate_dumps "$DB" 
 
 	dbdump "$DB" "$BACKUPDIR/$DB-$DATE.$DUMP_SUFFIX"
 
@@ -443,6 +451,7 @@ echo `du -hs "$BACKUPDIR"`
 echo
 echo ======================================================================
 
+
 ####################################
 # Run command when we're done
 ####################################
@@ -465,97 +474,106 @@ exec 1>&7 7>&-      # Restore stdout and close file descriptor #7.
 ####################################
 # Clean up old logs
 ####################################
-rm -f $BACKUPDIR/$DBHOST-$ODA.log
-rm -f $BACKUPDIR/ERRORS_$DBHOST-$ODA.log
-rm -f $BACKUPDIR/VDB_$DBHOST-$ODA.log
+rm -f $BACKUPDIR/$HOST-$ODA.log
+rm -f $BACKUPDIR/ERRORS_$HOST-$ODA.log
+rm -f $BACKUPDIR/VDB_$HOST-$ODA.log
+
 
 ####################################
-# Mail section if enabled
+# Mail section functions
 ####################################
 
-if [ "$MAILCONTENT" = "files" ]
-then
-
-  # Checks to see if LOGERR file is non-zero and if 
-  # adds it to the list of backed up files to mail out
-  if [ -s "$LOGERR" ]
-  then
+mail_files () {
+  if [ -s "$LOGERR" ]; then
+  
     BACKUPFILES="$BACKUPFILES $LOGERR"
-    ERRORNOTE="WARNING: Error Reported - "
+    if [ -s "$VDB_LOGFILE" ]; then
+        BACKUPFILES="$BACKUPFILES $VDB_LOGFILE"
+        ERRORNOTE="WARNING: Error Reported - "
+    else
+        ERRORNOTE="WARNING: Error Reported - "
+    fi
   fi
 
   # Calculates the total size of all files to be mailed out as attachment
   ATTSIZE=`du -c $BACKUPFILES | grep "[[:digit:][:space:]]total$" |sed s/\s*total//`
 
-  if [ $MAXATTSIZE -ge $ATTSIZE ]
-  then
+  if [ $MAXATTSIZE -ge $ATTSIZE ]; then 
     #enable multiple attachments
-    BACKUPFILES=`echo "$BACKUPFILES" | sed -e "s# # -a #g"`	
+    BACKUPFILES=`echo "$BACKUPFILES" | sed -e "s# # -a #g"`
     #send via mutt
-    mutt -s "$ERRORNOTE PostgreSQL Backup Log and SQL Files for $HOST - $DATE" $BACKUPFILES $MAILADDR < $LOGFILE	
-   else
-    cat "$LOGFILE" | mail -s "WARNING! - PostgreSQL Backup exceeds set maximum attachment size on $HOST - $DATE" $MAILADDR
-   fi
-
-elif [ "$MAILCONTENT" = "maillogs" ]
-then
-
-   cat "$LOGFILE" | mail -s "PostgreSQL Backup Log for $HOST - $DATE" $MAILADDR
-   if [ -s "$LOGERR" ]
-   then
-     cat "$LOGERR" | mail -s "ERRORS REPORTED: PostgreSQL Backup error Log for $HOST - $DATE" $MAILADDR
-   fi
-
-   if [ -s "$VDB_LOGFILE" ]
-   then
-     cat "$VDB_LOGFILE" | mail -s "VACUUM WARNINGS REPORTED: PostgreSQL Vacuum  Log for $HOST - $DATE" $MAILADDR
-   fi
-	
-elif [ "$MAILCONTENT" = "quiet" ]
-then
-
-  if [ -s "$LOGERR" ]
-  then
-    cat "$LOGERR" | mail -s "ERRORS REPORTED: PostgreSQL Backup error Log for $HOST - $DATE" $MAILADDR
-    cat "$LOGFILE" | mail -s "PostgreSQL Backup Log for $HOST - $DATE" $MAILADDR
+    mutt -s "$ERRORNOTE PgSQL Backup Logs and Dumps for $HOST - $DATE" $BACKUPFILES $MAILADDR < $LOGFILE
+  else
+    cat "$LOGFILE" | mail -s "WARNING! - PgSQL Backup exceeds set maximum attachment size on $HOST - $DATE" $MAILADDR
   fi
 
-  if [ -s "$VDB_LOGFILE" ]
-  then
-    cat "$VDB_LOGFILE" | mail -s "VACUUM WARNINGS: PostgreSQL Backup error Log for $HOST - $DATE" $MAILADDR
-  fi
+return 0
+}
 
-else
-  if [ -s "$LOGERR" -a -s "$VDB_LOGFILE" ]
-  then
+mail_logs () {
+ cat "$LOGFILE" | mail -s "PgSQL Backup Log for $HOST - $DATE" $MAILADDR
+ if [ -s "$LOGERR" ]; then
+    cat "$LOGERR" | mail -s "ERRORS REPORTED: PgSQL Backup error Log for $HOST - $DATE" $MAILADDR
+ fi
+ if [ -s "$VDB_LOGFILE" ]; then
+    cat "$VDB_LOGFILE" | mail -s "VACUUM WARNINGS REPORTED: PgSQL Vacuum  Log for $HOST - $DATE" $MAILADDR
+ fi
+
+return 0
+}
+
+mail_quiet () {
+ if [ -s "$LOGERR" -a -s "$VDB_LOGFILE" ]; then
+    cat "$LOGFILE" | mail -s "PSQL Backup Log for $HOST - $DATE" $MAILADDR
+    cat "$LOGERR" | mail -s "ERRORS REPORTED: PgSQL Backup error Log for $HOST - $DATE" $MAILADDR
+    cat "$VDB_LOGFILE" | mail -s "VACUUM WARNINGS: PgSQL Backup error Log for $HOST - $DATE" $MAILADDR
+
+ elif [ -s "$LOGERR" -o -s "$VDB_LOGFILE" ]; then
+    if [ -s "$LOGERR"  ]; then
+       cat "$LOGFILE" | mail -s "PSQL Backup Log for $HOST - $DATE" $MAILADDR
+       cat "$LOGERR" | mail -s "ERRORS REPORTED: PgSQL Backup error Log for $HOST - $DATE" $MAILADDR
+    fi
+    if [ -s "$VDB_LOGFILE" ]; then
+       cat "$LOGFILE" | mail -s "PSQL Backup Log for $HOST - $DATE" $MAILADDR
+       cat "$VDB_LOGFILE" | mail -s "VACUUM WARNINGS: PgSQL Backup error Log for $HOST - $DATE" $MAILADDR
+    fi
+ fi
+
+return 0
+}
+
+no_mail () {
+ if [ -s "$LOGERR" -a -s "$VDB_LOGFILE" ]; then
     cat "$LOGFILE"
+
     echo
     echo "###### WARNING ######"
     echo "Some errors reported during backup script execution."
     echo "Please check below."
-    echo 
+    echo
+
     cat "$LOGERR"
-    echo 
+
+    echo
     echo "###### VACUUMDB WARNING ######"
     echo "Some errors or warning notices were reported during the vacuumdb execution."
     echo "Most common vacuum NOTICES are in regards to max_fsm_pages & max_fsm_relations."
     echo "Please check below."
     echo
+
     cat "$VDB_LOGFILE"
 
-  elif [ -s "$LOGERR" -o -s "$VDB_LOGFILE" ]
-  then
+ elif [ -s "$LOGERR" -o -s "$VDB_LOGFILE" ]; then
     cat "$LOGFILE"
-    
-    if [ -s "$LOGERR" ]; then 
+
+    if [ -s "$LOGERR" ]; then
       echo
       echo "###### WARNING ######"
       echo "Some errors reported during backup script execution."
       echo "Please check below."
       echo
-      cat "$LOGERR"	
+      cat "$LOGERR"
     fi
- 
     if [ -s "$VDB_LOGFILE" ]; then
       echo
       echo "###### VACUUMDB WARNING ######"
@@ -564,19 +582,33 @@ else
       echo "Please check below."
       echo
       cat "$VDB_LOGFILE"
-    fi 
+    fi
+ else
+    cat "$LOGFILE"
+ fi
 
-  else
-   cat "$LOGFILE"
-  fi
-	
+return 0
+}
+
+####################################
+# Main Mail section 
+####################################
+
+if [ "$MAILCONTENT" = "files" ]; then
+   mail_files 
+elif [ "$MAILCONTENT" = "maillogs" ]; then
+   mail_logs
+elif [ "$MAILCONTENT" = "quiet" ]; then
+   mail_quiet
+else
+   no_mail
 fi
 
-if [ -s "$LOGERR" ]
-	then
-		STATUS=1
-	else
-		STATUS=0
+if [ -s "$LOGERR" ]; then
+   STATUS=1
+else
+   STATUS=0
 fi
 
 exit $STATUS
+
