@@ -307,10 +307,6 @@ rotate_dumps () {
   echo =========================
   echo Rotating Backup dumps ...
   echo =========================
-        echo Deleting old $DB backup file from $BACKUPDIR/last folder
-        echo Moving yesterday $DB backup file into $BACKUPDIR/last folder   
-        echo
-
 
   if [ "$RETENTION" = "yes" ]; then
 
