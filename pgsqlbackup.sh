@@ -3,6 +3,9 @@
 # PostgreSQL Backup Script Ver 1.0 
 # Based from the autopostgresbackup script
 # 
+#=========================== 
+# Author: Marcelo Martins
+# Date: 2008-08-07
 #
 #==========================================
 # TODO
@@ -120,6 +123,29 @@ EXTRA_OPTS=""
 
 # Command run after backups (uncomment to use)
 #POSTBACKUP="/etc/postgresql-backup-post"
+
+
+#====================
+# CloudFiles Options
+#===================
+# YOU MUST DOWNLOAD https://github.com/redbo/cloudfiles.sh/blob/master/cloudfiles.sh
+# AND COPY IT TO /USR/LOCA/BIN
+CFBACKUP="disabled"
+CF_USER="USERNAME"
+CF_KEY="API KEY"
+CF_REG="REGION"     # us or uk
+
+
+#=================
+# POST Commands
+#================
+
+# Command to run before backups (uncomment to use)
+#PREBACKUP="/etc/postgresql-backup-pre"
+
+# Command run after backups (uncomment to use)
+#POSTBACKUP="/etc/postgresql-backup-post"
+
 
 
 #=====================================================================
