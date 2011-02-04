@@ -1,0 +1,47 @@
+
+
+
+
+- INSTALLATION & SETUP 
+
+    1. Please make sure that the following commands are available on your system before running the script: 
+
+        - sed, mutt, awk 
+
+    2. Main Configuration Parameters 
+
+        - USERNAME      . Should be the "postgres" superuser or any other superuser (postgres recommended)
+        - CONN_TYPE     . A TCP/IP or Socket connection path must be setup. The superuser above must be allowed to auth through it (pg_hba.conf)
+        - DBNAMES       . The Default is set to "all", but you can provide a space separated list
+        - BACKUPDIR     . Location where the backups will be stored (superuser MUST have read+write access)
+        - PATH          . Add any additional paths if desired
+        - HOST          . Full HOSTNAME is picked up automatically but can be set manually if desired
+
+
+    3. Mail Configuration Parameters
+
+        - MAILCONTENT   . Could be set to files, stdout, maillogs and quiet (More info on "MAIL SETUP" section of script)
+        - MAXATTSIZE    . Max email size (default is 4MB)
+        - MAILADDR      . Email address
+
+
+    4. Advanced Configuration Parameters
+
+        - VACUUM            . Default is set to 0 (0 = NoVacuum, 1 = VacuumOnly, 2 = Vacuum & Analyze, 3 = FullVacuum)
+        - CREATE_DATABASE   . Yes or No for including CREATE DATABASE command on the backups (Default is yes)
+        - DUMP_OIDS         . Include or not OIDs on backup dump (default is no)
+        - COMP              . Compression type gzip or bzip2 (default is bzip2)
+        - DUMP_OPT          . Dump format can be; custom = Fc , Custom tar = Ft , SQL plain text = Fp (Default is Fc)
+        - RETENTION         . Keep a one day retention on the drive (Default is yes)
+        - EXTRA_OPTS        . Any other options you might wanna pass to the postgresql dump utility 
+
+
+    5. CloudFiles Configuration Parameters (in the works)
+
+        - CFBACKUP      . Enable pushing the backups to CloudFiles  (default is disabled)
+        - CF_USER       . CF Username
+        - CF_KEY        . CF api key
+        - CF_REG        . CF Region (Could be us or uk)
+
+
+
