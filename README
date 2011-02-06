@@ -1,14 +1,30 @@
 
+- INSTALLATION 
+
+    1. The following GNU utilities needs to be available prior to usage of this script 
+
+        - sed   he GNU sed stream editor
+        - mutt  text-based mailreader supporting MIME, GPG,PGP and threading    (If you want attached files)
+        - awk   a pattern scanning and text processing language
+        - mail  GNU mailutils utilities for handling mail 
+        - gzip  GNU compression utilities                       (If you want to use gzip compression instead of bzip2)
+        - bzip2 high-quality block-sorting file compressor      (default - must be available)
+
+
+    2. After verifing all those packages are available 
+        
+        - Copy pgsqlbackup.sh to a location that is accessible by the postgres superuser (e.g: /usr/local/bin)
+        - Change file mode to 750 
+        - Create a cronjob under the postgres superuser account to backup the database(s)
+        _ If you would like to push the backups to the Cloud please check "Cloud Configuration & Setup" 
+          after reading the "configuration" section below
 
 
 
-- INSTALLATION & SETUP 
 
-    1. Please make sure that the following commands are available on your system before running the script: 
+- CONFIGURATION
 
-        - sed, mutt, awk 
-
-    2. Main Configuration Parameters 
+    1. Main Configuration Parameters 
 
         - USERNAME      . Should be the "postgres" superuser or any other superuser (postgres recommended)
         - CONN_TYPE     . A TCP/IP or Socket connection path must be setup. The superuser above must be allowed to auth through it (pg_hba.conf)
@@ -18,14 +34,14 @@
         - HOST          . Full HOSTNAME is picked up automatically but can be set manually if desired
 
 
-    3. Mail Configuration Parameters
+    2. Mail Configuration Parameters
 
         - MAILCONTENT   . Could be set to files, stdout, maillogs and quiet (More info on "MAIL SETUP" section of script)
         - MAXATTSIZE    . Max email size (default is 4MB)
         - MAILADDR      . Email address
 
 
-    4. Advanced Configuration Parameters
+    3. Advanced Configuration Parameters
 
         - VACUUM            . Default is set to 0 (0 = NoVacuum, 1 = VacuumOnly, 2 = Vacuum & Analyze, 3 = FullVacuum)
         - CREATE_DATABASE   . Yes or No for including CREATE DATABASE command on the backups (Default is yes)
@@ -36,9 +52,17 @@
         - EXTRA_OPTS        . Any other options you might wanna pass to the postgresql dump utility 
 
 
-    5. CloudFiles Configuration Parameters (in the works)
 
-        - CFBACKUP      . Enable pushing the backups to CloudFiles  (default is disabled)
+
+ 
+- CLOUD CONFIGURATION & SETUP
+
+    1. CloudFiles Configuration Parameters
+
+        - CF_BACKUP     . Enable pushing the backups to CloudFiles  (default is disabled)
+        - CF_UTIL       . Location of the cloudfiles.sh utility    
+        - CF_PUSH       . Push all files or just the dumps with no logs ("all" or "nologs")
+        - CF_CONTAINER  . Cloud container to push files into 
         - CF_USER       . CF Username
         - CF_KEY        . CF api key
         - CF_REG        . CF Region (Could be us or uk)
