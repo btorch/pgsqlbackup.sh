@@ -418,7 +418,7 @@ cloud_push () {
 
             for filename in $CF_FILES 
             do  
-                echo "Pushing file : $file "
+                echo "Pushing file : $filename "
                 $CF_UTIL $CF_REG:$CF_USER $CF_KEY PUT $CF_CONTAINER $filename
             done
         
