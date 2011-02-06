@@ -407,7 +407,7 @@ cloud_push () {
 
             CODE=`$CF_UTIL $CF_REG:$CF_USER $CF_KEY INFO $CF_CONTAINER &>/dev/null; echo $?`
             if [ "$CODE" = "1" ]; then 
-                echo "Creating container $CF_CONTAINER "
+                echo "Creating container : $CF_CONTAINER "
                 RESULT=`$CF_UTIL $CF_REG:$CF_USER $CF_KEY MKDIR /$CF_CONTAINER ; echo $?`
 
                 if [ "$RESULT" = "1" ]; then 
