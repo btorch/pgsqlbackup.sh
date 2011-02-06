@@ -133,14 +133,14 @@ EXTRA_OPTS=""
 # CLOUDFILES SETUP 
 #===================
 # You MUST DOWNLOAD cloudfiles.sh from https://github.com/btorch/cloudfiles.sh
-# and copy it to /usr/local/bin with permissions set to 755  
+# and copy it to /usr/local/bin with permissions set to 755 and owned by postgres user 
 CF_BACKUP="disabled"                        # enabled or disabled for allowing cloud backup push                                 
 CF_UTIL="/usr/local/bin/cloudfiles.sh"      # location of the cloudfiles.sh utility
 CF_PUSH="all"                               # set to either "all" or "nologs"
 CF_CONTAINER="pgbackups"                    # cloud container to push files 
 CF_USER="USERNAME"                          # cloud username
 CF_KEY="API KEY"                            # cloud api key
-CF_REG="REGION"                             # region where the cloud is located (us or uk)
+CF_REG="REGION"                             # region where the cloud is located (US or UK)
 
 
 #=================
