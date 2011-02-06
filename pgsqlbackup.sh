@@ -10,6 +10,8 @@
 #==========================================
 # TODO
 #==========================================
+# - Check to make sure there are no backup files older then 7 days
+#   and if there is remove them 
 # - Check that the files have been uploaded to the cloud
 # - Add S3 support to the cloud push
 # - Look for some more possible error checking
@@ -406,7 +408,7 @@ cloud_push () {
             CODE=`$CF_UTIL $CF_REG:$CF_USER $CF_KEY INFO $CF_CONTAINER &>/dev/null; echo $?`
             if [ "$CODE" = "1" ]; then 
                 echo "Creating container $CF_CONTAINER "
-                RESULT=`$CF_UTIL $CF_REG:$CF_USER $CF_KEY MKDIR $CF_CONTAINER ; echo $?`
+                RESULT=`$CF_UTIL $CF_REG:$CF_USER $CF_KEY MKDIR /$CF_CONTAINER ; echo $?`
 
                 if [ "$RESULT" = "1" ]; then 
                     echo "Problems creating container .. exiting"
@@ -417,7 +419,7 @@ cloud_push () {
             for filename in $CF_FILES 
             do  
                 echo "Pushing file : $file "
-                $CF_UTIL $CF_REG:$CF_USER $CF_KEY PUT $CF_CONTAINER $file
+                $CF_UTIL $CF_REG:$CF_USER $CF_KEY PUT $CF_CONTAINER $filename
             done
         
         fi
