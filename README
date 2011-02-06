@@ -57,7 +57,12 @@
  
 - CLOUD CONFIGURATION & SETUP
 
-    1. CloudFiles Configuration Parameters
+    1. Install "cloudfiles.sh" utility 
+        - Download from git://github.com/btorch/cloudfiles.sh.git
+        - Install under /usr/local/bin
+        - Change mode to 755 
+
+    2. CloudFiles Configuration Parameters
 
         - CF_BACKUP     . Enable pushing the backups to CloudFiles  (default is disabled)
         - CF_UTIL       . Location of the cloudfiles.sh utility    
