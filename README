@@ -73,7 +73,7 @@
         - CF_REG        . CF Region (Could be us or uk)
 
 
-    3. S3 Configuration Parameters ( FUTURE WORK )
+    3. S3 Configuration Parameters (FUTURE WORK)
 
         - S3_BACKUP     . Enable pushing the backups to CloudFiles  (default is disabled)
         - S3_UTIL       . Location of the cloudfiles.sh utility    
