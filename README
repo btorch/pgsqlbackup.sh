@@ -55,14 +55,14 @@
 
 
  
-- CLOUD CONFIGURATION & SETUP
+- CLOUD CONFIGURATION & SETUP ( in the works )
 
     1. Install "cloudfiles.sh" utility 
         - Download from git://github.com/btorch/cloudfiles.sh.git
         - Install under /usr/local/bin
         - Change mode to 755 
 
-    2. CloudFiles Configuration Parameters
+    2. CloudFiles Configuration Parameters ( script has no support for files over 5GB yet )
 
         - CF_BACKUP     . Enable pushing the backups to CloudFiles  (default is disabled)
         - CF_UTIL       . Location of the cloudfiles.sh utility    
@@ -72,5 +72,15 @@
         - CF_KEY        . CF api key
         - CF_REG        . CF Region (Could be us or uk)
 
+
+    3. S3 Configuration Parameters (FUTURE WORK)
+
+        - S3_BACKUP     . Enable pushing the backups to CloudFiles  (default is disabled)
+        - S3_UTIL       . Location of the cloudfiles.sh utility    
+        - S3_PUSH       . Push all files or just the dumps with no logs ("all" or "nologs")
+        - S3_CONTAINER  . Cloud container to push files into 
+        - S3_USER       . CF Username
+        - S3_KEY        . CF api key
+        - S3_REG        . CF Region (Could be us or uk)
 
 

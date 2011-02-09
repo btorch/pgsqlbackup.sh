@@ -101,7 +101,6 @@ MAILADDR="admin@domain.com"
 # 0 : Do not perform any Vacuum functions (default)
 # 1 : Vacuum only 
 # 2 : Vacuum and Analyze
-# 3 : Do a Full Vacuum and Analyze 
 VACUUM=0
 
 # Include CREATE DATABASE commands in backup
@@ -216,8 +215,6 @@ if [ "$VACUUM" = "1" ]; then
     VACUUM_OPT=""
 elif [ "$VACUUM" = "2" ]; then
     VACUUM_OPT="--analyze"
-elif [ "$VACUUM" = "3" ]; then
-    VACUUM_OPT="--analyze --full"
 fi
 
 if [ "$CREATE_DATABASE" = "yes" ]; then
@@ -265,17 +262,19 @@ dbvacuum () {
 
     vacuumdb --user=$USERNAME --host=$CONN_TYPE --quiet $VACUUM_OPT $1 2>> $VDB_LOGFILE
 
-    echo End Time: `date +%m-%d-%Y_%r`
-
     if [ -s $VDB_LOGFILE ]; then
-        echo "Status: warnings/errors detected"
-        echo "See file $VDB_LOGFILE"
-        echo 
+        if [[ $? -qt >0 ]]; then  
+            echo "Status: warnings/errors detected...Skipping vacuum."
+            echo "Please see file $VDB_LOGFILE for more information"
+            echo 
+        fi    
     else
         echo "Status: Vaccum performed successfully "
         echo
     fi
 
+    echo End Time: `date +%m-%d-%Y_%r`
+    echo
 }
 
 
