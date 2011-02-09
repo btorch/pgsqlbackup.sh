@@ -230,7 +230,7 @@ fi
 
 if [ "$DUMP_OPT" = "-Fp" ]; then
     DUMP_SUFFIX="sql"
-elif [ "$DUMP_OPT" = "-Fp" ]; then 
+elif [ "$DUMP_OPT" = "-Ft" ]; then 
     DUMP_SUFFIX="sql.tar"  	
 else
     DUMP_SUFFIX="dump"
@@ -249,7 +249,7 @@ fi
     CORE=`psql -l --user=$USERNAME --host=$CONN_TYPE &> /dev/null`	
     if [[ $CODE -ne 0 ]]; then 
         echo -e " FATAL:  Ident authentication failed for $USERNAME on connection $CONN_TYPE \n"
-        xit 1  	  
+        exit 1  	  
     fi
 }
 
