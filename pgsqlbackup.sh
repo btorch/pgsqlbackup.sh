@@ -263,7 +263,7 @@ dbvacuum () {
     vacuumdb --user=$USERNAME --host=$CONN_TYPE --quiet $VACUUM_OPT $1 2>> $VDB_LOGFILE
 
     if [ -s $VDB_LOGFILE ]; then
-        if [[ $? -qt 0 ]]; then  
+        if [[ $? > 0 ]]; then  
             echo "Status: warnings/errors detected...Skipping vacuum."
             echo "Please see file $VDB_LOGFILE for more information"
             echo 
