@@ -388,6 +388,10 @@ cloud_push () {
 
     if [ "$CF_BACKUP" = "enabled" ]; then 
 
+        LIST="$1"
+        SUFX="$EXTENSION"
+        SEVEN_DAYS_AGO=`date -d "-7 days" +%m-%d-%Y`
+
         echo =========================
         echo "Performing Cloud Push  "
         echo =========================
@@ -422,6 +426,19 @@ cloud_push () {
             done
         
         fi
+
+        
+        for database in $LIST
+        do 
+            RES=`$CF_UTIL $CF_REG:$CF_USER $CF_KEY INFO $CF_CONTAINER/$database-$SEVEN_DAYS_AGO.$SUFX &>/dev/null; echo $?` 
+            if [ "$RES" = "0" ]; then 
+                echo "Deleteing old file: $database-$SEVEN_DAYS_AGO.$SUFX  "
+                if [ ! `$CF_UTIL $CF_REG:$CF_USER $CF_KEY RM /$CF_CONTAINER/$database-$SEVEN_DAYS_AGO.$SUFX  &>/dev/null; echo $?` ]; then 
+                   echo "Error deleting file: $database-$SEVEN_DAYS_AGO.$SUFX (manual remove required)" 
+                fi
+            fi     
+        done
+
 
         echo
         echo =========================
@@ -556,7 +573,8 @@ echo ======================================================================
 # Pushing backups to the cloud
 ####################################
 
-cloud_push 
+EXTENSION="$DUMP_SUFFIX$SUFFIX"
+cloud_push $DBLIST $EXTENSION
 
 
 ####################################
