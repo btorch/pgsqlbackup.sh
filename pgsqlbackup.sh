@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# PostgreSQL Backup Script Ver 1.0.1
+# PostgreSQL Backup Script Ver 1.0.2
 # Based from the autopostgresbackup script
 # 
 #=========================== 
@@ -135,14 +135,18 @@ EXTRA_OPTS=""
 #===================
 # You MUST DOWNLOAD cloudfiles.sh from https://github.com/btorch/cloudfiles.sh
 # CF_UTIL specifies location. Have permissions set to 755 and owned by postgres user 
-CF_BACKUP="disabled"                            # enabled or disabled for allowing cloud backup push                                 
-CF_UTIL="/usr/local/bin/cloudfiles.sh"          # location of the cloudfiles.sh utility
-CF_PUSH="all"                                   # set to either "all" or "nologs"
-CF_CONTAINER="pgbackups"                        # cloud container to push files 
-CF_USER="USERNAME"                              # cloud username
-CF_KEY="API KEY"                                # cloud api key
-CF_REG="REGION"                                 # region where the cloud is located (US or UK)
-
+# ST utility can be used for Rackspace or OpenStack cloudfiles setup
+# Cloudfiles.sh utility only works with Rackspace cloudfiles setup at this time
+#
+CF_BACKUP="disabled"                        # enabled or disabled for allowing cloud backup push                                 
+CF_UTIL="/usr/local/bin/cloudfiles.sh"      # location of the cloudfiles.sh utility
+CF_PUSH="all"                               # set to either "all" or "nologs"
+CF_CONTAINER=""                             # container to push files into
+CF_USER=""                                  # auth username
+CF_KEY=""                                   # cloud api key or DevAuth/SwAuth user password
+CF_REG=""                                   # region where the cloud is located (US or UK)
+CF_AUTH=""                                  # cloudfiles Auth URL (REQUIRED FOR ST UTILITY)
+CF_ACCOUNT=""                               # DevAuth/SwAuth Account the username belongs to (REQUIRED FOR ST UTILITY)
 
 
 #=================
@@ -172,68 +176,20 @@ VDB_LOGFILE=$BACKUPDIR/VDB_$HOST-$DATE.log  	# Vacuum error Logfile Name
 BACKUPFILES=""
 
 
-##########################################
-# Check existance of required directories 
-# and create them if needed
-##########################################
-
-if [ ! -e "$BACKUPDIR" ]; then
-    mkdir -p "$BACKUPDIR"
-fi
-
-if [ "$RETENTION" = "yes" ]; then
-    if [ ! -e "$BACKUPDIR/last" ]; then
-        mkdir -p "$BACKUPDIR/last"
-    fi
-fi
-
-
-##########################################
-# Create log files
-##########################################
-touch $LOGFILE
-touch $LOGERR
-touch $VDB_LOGFILE
-echo 0>$VDB_LOGFILE
-
-
-###################################
-# IO redirection for logging.
-####################################
-exec 6>&1           # Link file descriptor #6 with stdout. Saves stdout.
-exec > $LOGFILE     # stdout replaced with file $LOGFILE.
-
-exec 7>&2           # Link file descriptor #7 with stderr. Saves stderr
-exec 2> $LOGERR     # stderr replaced with file $LOGERR.
-
-
-
-##########################################
-# Setting up some of the possible flags
-##########################################
-
-if [ "$VACUUM" = "1" ]; then
-    VACUUM_OPT=""
-elif [ "$VACUUM" = "2" ]; then
-    VACUUM_OPT="--analyze"
-fi
-
-if [ "$CREATE_DATABASE" = "yes" ]; then
-    OPT="$OPT --create"
-fi
-
-if [ "$DUMP_OIDS" = "yes" ]; then
-    OPT="$OPT --oids"
-fi
-
-if [ "$DUMP_OPT" = "-Fp" ]; then
-    DUMP_SUFFIX="sql"
-elif [ "$DUMP_OPT" = "-Ft" ]; then 
-    DUMP_SUFFIX="sql.tar"  	
-else
-    DUMP_SUFFIX="dump"
-fi
-  
+# Process Command Line
+while getopts h opts
+do
+  case $opts in
+    h)
+     echo -e "\t Please read the README file for usage/setup information"
+     exit 1
+     ;;
+    *)
+     echo -e "\tPlease read the README file for usage/setup information"
+     exit 1
+     ;;
+  esac
+done
 
 
 
@@ -243,7 +199,7 @@ fi
 
 
 # CHECK AUTHENTICATION 
-    check_auth () {
+check_auth () {
     CORE=`psql -l --user=$USERNAME --host=$CONN_TYPE &> /dev/null`	
     if [[ $CODE -ne 0 ]]; then 
         echo -e " FATAL:  Ident authentication failed for $USERNAME on connection $CONN_TYPE \n"
@@ -393,24 +349,32 @@ cloud_push () {
         shift
         LIST=("$@")
         SEVEN_DAYS_AGO=`date -d "-7 days" +%m-%d-%Y`
+        CFU=`basename $CF_UTIL`
+        PROCEED="true"
 
-        echo ""
-        echo =========================
-        echo "Performing Cloud Push  "
-        echo =========================
-        echo Start Time: `date +%m-%d-%Y_%r`
-        echo
-
-        if [ ! -e "$CF_UTIL" ]; then 
+        if [ ! -e "$CF_UTIL" ]; then
             echo " No $CF_UTIL found. Cloud push has failed "
+            PROCEED="false"
         else
-            
             if [ "$CF_PUSH" = "all" ]; then 
                 CF_FILES=`find $BACKUPDIR  -maxdepth 1 -type f`
             elif [ "$CF_PUSH" = "nologs" ]; then 
                 CF_FILES=`find $BACKUPDIR  -maxdepth 1 -type f | grep -v "*.log"`    
             fi
 
+            if [ -n "$CF_ACCOUNT" ]; then 
+                CF_ACCOUNT="$CF_ACCOUNT:"
+            fi
+
+            echo ""
+            echo =========================
+            echo "Performing Cloud Push  "
+            echo =========================
+            echo Start Time: `date +%m-%d-%Y_%r`
+            echo
+        fi    
+
+        if [[ $CFU =~ cloudfiles ]]; then  
             CODE=`$CF_UTIL $CF_REG:$CF_USER $CF_KEY INFO $CF_CONTAINER &>/dev/null; echo $?`
             if [ "$CODE" = "1" ]; then 
                 echo "Creating container : $CF_CONTAINER "
@@ -427,27 +391,50 @@ cloud_push () {
                 echo "Pushing file : $filename "
                 $CF_UTIL $CF_REG:$CF_USER $CF_KEY PUT $CF_CONTAINER $filename
             done
-        
+
+            echo "" 
+            for database in $LIST
+            do 
+                RES=`$CF_UTIL $CF_REG:$CF_USER $CF_KEY INFO $CF_CONTAINER/$database-$SEVEN_DAYS_AGO.$SUFX &>/dev/null; echo $?`
+                if [ "$RES" = "0" ]; then 
+                    echo "Deleting old file: $database-$SEVEN_DAYS_AGO.$SUFX  "
+                    if [ ! `$CF_UTIL $CF_REG:$CF_USER $CF_KEY RM /$CF_CONTAINER/$database-$SEVEN_DAYS_AGO.$SUFX  &>/dev/null; echo $?` ]; then 
+                       echo "Error deleting file: $database-$SEVEN_DAYS_AGO.$SUFX (manual remove required)" 
+                    fi
+                fi     
+            done
+            
+        elif [[ $CFU =~ st* ]]; then  
+            CPWD=`pwd`
+            for filename in $CF_FILES
+            do
+                echo "Pushing file: $filename "
+                BASENAME=`basename $filename`
+                cd $BACKUPDIR
+                $CF_UTIL -A $CF_AUTH -U "$CF_ACCOUNT$CF_USER" -K "$CF_KEY" upload $CF_CONTAINER $BASENAME
+            done
+            cd $CPWD
+
+            echo "" 
+            for database in $LIST
+            do
+                echo "Deleting old file: $database-$SEVEN_DAYS_AGO.$SUFX  "
+                RES=`$CF_UTIL -A $CF_AUTH -U "$CF_ACCOUNT$CF_USER" -K "$CF_KEY" delete $CF_CONTAINER $database-$SEVEN_DAYS_AGO.$SUFX 2>&1 | head -n 1` 
+                if [[ "$RES" =~ "not found" ]]; then
+                    echo "Error deleting file: $database-$SEVEN_DAYS_AGO.$SUFX ($RES)" 
+                fi
+            done
+        fi        
+
+
+        if [ "$PROCEED" = "true" ]; then         
+            echo
+            echo =========================
+            echo End Time: `date +%m-%d-%Y_%r`
+            echo
         fi
 
-        echo "" 
-        for database in $LIST
-        do 
-            RES=`$CF_UTIL $CF_REG:$CF_USER $CF_KEY INFO $CF_CONTAINER/$database-$SEVEN_DAYS_AGO.$SUFX &>/dev/null; echo $?`
-            if [ "$RES" = "0" ]; then 
-                echo "Deleting old file: $database-$SEVEN_DAYS_AGO.$SUFX  "
-                if [ ! `$CF_UTIL $CF_REG:$CF_USER $CF_KEY RM /$CF_CONTAINER/$database-$SEVEN_DAYS_AGO.$SUFX  &>/dev/null; echo $?` ]; then 
-                   echo "Error deleting file: $database-$SEVEN_DAYS_AGO.$SUFX (manual remove required)" 
-                fi
-            fi     
-        done
-
-
-        echo
-        echo =========================
-        echo End Time: `date +%m-%d-%Y_%r`
-        echo
-    fi        
+    fi 
 }    
 
 
@@ -487,6 +474,69 @@ if [ "$PREBACKUP" ]
     echo
 fi
 
+
+
+##########################################
+# Check existance of required directories 
+# and create them if needed
+##########################################
+
+if [ ! -e "$BACKUPDIR" ]; then
+    mkdir -p "$BACKUPDIR"
+fi
+
+if [ "$RETENTION" = "yes" ]; then
+    if [ ! -e "$BACKUPDIR/last" ]; then
+        mkdir -p "$BACKUPDIR/last"
+    fi
+fi
+
+
+##########################################
+# Create log files
+##########################################
+touch $LOGFILE
+touch $LOGERR
+touch $VDB_LOGFILE
+echo 0>$VDB_LOGFILE
+
+
+###################################
+# IO redirection for logging.
+####################################
+exec 6>&1           # Link file descriptor #6 with stdout. Saves stdout.
+exec > $LOGFILE     # stdout replaced with file $LOGFILE.
+
+exec 7>&2           # Link file descriptor #7 with stderr. Saves stderr
+exec 2> $LOGERR     # stderr replaced with file $LOGERR.
+
+
+
+##########################################
+# Setting up some of the possible flags
+##########################################
+
+if [ "$VACUUM" = "1" ]; then
+    VACUUM_OPT=""
+elif [ "$VACUUM" = "2" ]; then
+    VACUUM_OPT="--analyze"
+fi
+
+if [ "$CREATE_DATABASE" = "yes" ]; then
+    OPT="$OPT --create"
+fi
+
+if [ "$DUMP_OIDS" = "yes" ]; then
+    OPT="$OPT --oids"
+fi
+
+if [ "$DUMP_OPT" = "-Fp" ]; then
+    DUMP_SUFFIX="sql"
+elif [ "$DUMP_OPT" = "-Ft" ]; then 
+    DUMP_SUFFIX="sql.tar"  	
+else
+    DUMP_SUFFIX="dump"
+fi
 
 
 
