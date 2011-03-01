@@ -165,6 +165,7 @@ CF_ACCOUNT=""                               # DevAuth/SwAuth Account the usernam
 # DO NOT MODIFY ANYTHING FROM DOWN HERE 
 #=====================================================================
 
+VER="1.0.2"
 DATE=`date +%m-%d-%Y`                       # Datestamp e.g 2002-09-21
 ODA=`date -d "-1 days" +%m-%d-%Y`           # 1 day ago
 TDA=`date -d "-2 days" +%m-%d-%Y`           # 2 days ago
@@ -411,7 +412,7 @@ cloud_push () {
                 echo "Pushing file: $filename "
                 BASENAME=`basename $filename`
                 cd $BACKUPDIR
-                $CF_UTIL -A $CF_AUTH -U "$CF_ACCOUNT$CF_USER" -K "$CF_KEY" upload $CF_CONTAINER $BASENAME
+                $CF_UTIL -A $CF_AUTH -U "$CF_ACCOUNT$CF_USER" -K "$CF_KEY" upload $CF_CONTAINER $BASENAME &> /dev/null
             done
             cd $CPWD
 
@@ -549,7 +550,7 @@ check_auth
 
 
 echo ======================================================================
-echo pgsqlbackup.sh VER 1.0.1
+echo pgsqlbackup.sh $VER 
 echo http://www.zeroaccess.org/postgresql
 echo 
 echo Backup of Database Server - $HOST
