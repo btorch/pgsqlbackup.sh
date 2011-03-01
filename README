@@ -57,20 +57,29 @@
  
 - CLOUD CONFIGURATION & SETUP ( in the works )
 
-    1. Install "cloudfiles.sh" utility 
-        - Download from git://github.com/btorch/cloudfiles.sh.git
-        - Install under /usr/local/bin
-        - Change mode to 755 
+    1. Install "cloudfiles.sh" or "st.py" utility 
+
+        * For "cloudfiles.sh" 
+            - Download from git://github.com/btorch/cloudfiles.sh.git
+            - Install it under desired location
+            - Change mode to 755 
+        * For "st.py"
+            - Download from https://github.com/openstack/swift/raw/master/bin/st
+            - Install it under desired location
+            - Change mode to 755
+
 
     2. CloudFiles Configuration Parameters ( script has no support for files over 5GB yet )
 
         - CF_BACKUP     . Enable pushing the backups to CloudFiles  (default is disabled)
-        - CF_UTIL       . Location of the cloudfiles.sh utility    
+        - CF_UTIL       . Location of the cloudfiles.sh or st.py utility    
         - CF_PUSH       . Push all files or just the dumps with no logs ("all" or "nologs")
         - CF_CONTAINER  . Cloud container to push files into 
         - CF_USER       . CF Username
-        - CF_KEY        . CF api key
-        - CF_REG        . CF Region (Could be us or uk)
+        - CF_KEY        . CF api key or DevAuth/SwAuth password
+        - CF_REG        . CF Region (Could be US or UK) (required for "cloudfiles.sh utility)
+        - CF_AUTH       . CF AUTH URL (required for "st" utility) 
+        - CF_ACCOUNT    . CF ACCOUNT a user belongs to (required for "st" utility when using DevAuth/SwAuth auth systems)
 
 
     3. S3 Configuration Parameters (FUTURE WORK)
