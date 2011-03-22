@@ -6,7 +6,7 @@
         - sed   he GNU sed stream editor
         - mutt  text-based mailreader supporting MIME, GPG,PGP and threading    (If you want attached files)
         - awk   a pattern scanning and text processing language
-        - mail  GNU mailutils utilities for handling mail 
+        - mail  GNU mailutils or bsd-mailx for handling mail 
         - gzip  GNU compression utilities                       (If you want to use gzip compression instead of bzip2)
         - bzip2 high-quality block-sorting file compressor      (default - must be available)
 
